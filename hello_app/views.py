@@ -23,20 +23,29 @@ def greet(request):
 
 
 def generate_sensor_data():
-    """生成随机的传感器数据，模拟I2C传感器输出"""
-    temperature = round(random.uniform(20.0, 35.0), 2)  # 温度: 20-35摄氏度
-    humidity = round(random.uniform(30.0, 80.0), 2)  # 湿度: 30-80%
-    current = round(random.uniform(0.5, 2.5), 2)  # 电流: 0.5-2.5A
-    voltage = round(random.uniform(3.0, 5.0), 2)  # 电压: 3.0-5.0V
+    """生成随机的传感器数据，包含status"""
+    # 注意：这里使用与传感器模拟器相同的范围计算中值
+    current_range = (0.5, 5.0)
+    voltage_range = (210.0, 240.0)
+
+    temperature = round(random.uniform(20.0, 35.0), 2)
+    humidity = round(random.uniform(30.0, 80.0), 2)
+    current = round(random.uniform(*current_range), 2)
+    voltage = round(random.uniform(*voltage_range), 2)
+
+    # 计算status
+    current_mid = (current_range[0] + current_range[1]) / 2
+    voltage_mid = (voltage_range[0] + voltage_range[1]) / 2
+    status = 'fail' if current > current_mid or voltage > voltage_mid else 'pass'
 
     return {
         'temperature': temperature,
         'humidity': humidity,
         'current': current,
         'voltage': voltage,
-        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'status': status  # 添加status字段
     }
-
 
 def sensor_data(request):
     """获取最新的传感器数据"""
