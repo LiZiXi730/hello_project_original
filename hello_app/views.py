@@ -80,3 +80,8 @@ def home(request):
 def sensor_dashboard(request):
     """传感器数据仪表盘页面"""
     return TemplateResponse(request, 'sensor_dashboard.html', {})
+
+
+def drag_drop_editor(request):
+    """拖拽式编程编辑器页面"""
+    return TemplateResponse(request, 'drag_drop_editor.html', {})

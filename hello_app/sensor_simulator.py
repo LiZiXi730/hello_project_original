@@ -101,3 +101,4 @@ class I2CSensorSimulator:
         if data['current'] > midpoints['current'] or data['voltage'] > midpoints['voltage']:
             return 'fail'
         return 'pass'
+
