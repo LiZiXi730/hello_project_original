@@ -45,8 +45,8 @@
         }
 
         #canvas {
-            width: 2000px;
-            height: 2000px;
+            width: 100%;
+            height: 100%;
             position: relative;
         }
 
@@ -60,7 +60,6 @@
             padding: 10px;
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
             cursor: move;
-            user-select: none;
         }
 
         .module-input {
@@ -85,7 +84,7 @@
             cursor: pointer;
             color: #ff4444;
             font-weight: bold;
-            font-size: 14px;
+            font-size: 16px;
         }
 
         .module-ports {
@@ -99,17 +98,14 @@
             background-color: #666;
             border-radius: 50%;
             margin: 5px 0;
-            cursor: crosshair;
         }
 
-        .input-ports {
-            display: flex;
-            flex-direction: column;
+        .input-port {
+            align-self: center;
         }
 
-        .output-ports {
-            display: flex;
-            flex-direction: column;
+        .output-port {
+            align-self: center;
         }
 
         /* 连线画布 */
@@ -128,6 +124,36 @@
             border-left: 1px solid #ccc;
             padding: 10px;
             overflow-y: auto;
+        }
+
+        .results-panel h3 {
+            margin-top: 0;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #ccc;
+        }
+
+        /* 新增的模块配置面板 */
+        .module-config-panel {
+            width: 300px;
+            background-color: #f0f0f0;
+            border-left: 1px solid #ccc;
+            padding: 10px;
+            overflow-y: auto;
+        }
+
+        .module-config-card {
+            background-color: white;
+            border-radius: 5px;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+        }
+
+        .module-config-card input {
+            width: 100%;
+            padding: 5px;
+            margin: 5px 0;
+            box-sizing: border-box;
         }
 
         /* 模态框样式 */
@@ -211,6 +237,14 @@
         </div>
     </div>
 
+    <!-- 新增的模块配置面板 -->
+    <div class="module-config-panel">
+        <h3>模块配置</h3>
+        <div id="module-config-container">
+            拖拽模块到画布以显示配置
+        </div>
+    </div>
+
     <!-- 输入模块配置模态框 -->
     <div class="modal" id="input-modal">
         <div class="modal-content">
@@ -248,6 +282,18 @@
         </div>
     </div>
 
+    <!-- 删除确认模态框 -->
+    <div class="modal" id="delete-confirm-modal">
+        <div class="modal-content">
+            <h3>确认删除</h3>
+            <p>确定要删除这个模块吗？相关的连接也将被移除。</p>
+            <div class="modal-footer">
+                <button type="button" class="modal-close">取消</button>
+                <button type="button" id="confirm-delete">确认删除</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // 全局变量
         let modules = [];
@@ -259,6 +305,7 @@
         let connectionLayer = document.getElementById('connection-layer');
         let ctx = connectionLayer.getContext('2d');
         let currentEditingModule = null;
+        let moduleToDelete = null; // 待删除的模块ID
 
         // 初始化画布大小
         function resizeCanvas() {
@@ -375,36 +422,135 @@
                 });
             });
 
-            // 添加删除按钮事件
+            // 删除按钮事件
             moduleElement.querySelector('.delete-module').addEventListener('click', (e) => {
-                e.stopPropagation();
-                deleteModule(moduleId);
+                e.stopPropagation(); // 防止触发拖动事件
+                showDeleteConfirmation(moduleId);
             });
+
+            // 在新增面板中添加对应的配置卡片
+            addModuleConfigCard(moduleData);
 
             updateResults();
         }
 
-        // 删除模块
-        function deleteModule(moduleId) {
-            // 从模块数组中移除
-            modules = modules.filter(module => module.id !== moduleId);
+        // 显示删除确认对话框
+        function showDeleteConfirmation(moduleId) {
+            moduleToDelete = moduleId;
+            document.getElementById('delete-confirm-modal').style.display = 'flex';
+        }
 
-            // 移除相关的连线
+        // 执行删除操作
+        function deleteModule() {
+            if (!moduleToDelete) return;
+
+            // 1. 从模块数组中移除
+            const moduleIndex = modules.findIndex(m => m.id === moduleToDelete);
+            if (moduleIndex !== -1) {
+                modules.splice(moduleIndex, 1);
+            }
+
+            // 2. 移除相关的连接
             connections = connections.filter(conn =>
-                conn.start.moduleId !== moduleId && conn.end.moduleId !== moduleId
+                conn.start.moduleId !== moduleToDelete &&
+                conn.end.moduleId !== moduleToDelete
             );
 
-            // 从DOM中移除
-            const moduleElement = document.getElementById(moduleId);
+            // 3. 从DOM中移除模块元素
+            const moduleElement = document.getElementById(moduleToDelete);
             if (moduleElement) {
                 moduleElement.remove();
             }
 
-            // 重绘连线
-            redrawConnections();
+            // 4. 移除配置面板中的对应配置卡片
+            const configCard = document.getElementById(`config-${moduleToDelete}`);
+            if (configCard) {
+                configCard.remove();
+            }
 
-            // 更新结果
+            // 5. 重绘连线和更新结果
+            redrawConnections();
             updateResults();
+
+            // 6. 重置变量并关闭模态框
+            moduleToDelete = null;
+            document.getElementById('delete-confirm-modal').style.display = 'none';
+        }
+
+        // 在配置面板中添加模块配置卡片
+        function addModuleConfigCard(moduleData) {
+            const container = document.getElementById('module-config-container');
+            let configCard;
+
+            if (moduleData.type === 'input') {
+                configCard = `
+                    <div class="module-config-card" id="config-${moduleData.id}">
+                        <h4>输入模块 ${moduleData.id.split('-')[1]}</h4>
+                        <div class="input-values">
+                            <input type="number" value="${moduleData.values[0]}"
+                                   onchange="updateInputModuleValue('${moduleData.id}', this.value)">
+                        </div>
+                    </div>
+                `;
+            } else if (moduleData.type === 'calculator') {
+                configCard = `
+                    <div class="module-config-card" id="config-${moduleData.id}">
+                        <h4>计算模块 ${moduleData.id.split('-')[1]}</h4>
+                        <div>
+                            <select onchange="updateCalculatorOperation('${moduleData.id}', this.value)">
+                                <option value="+" ${moduleData.operation === '+' ? 'selected' : ''}>+</option>
+                                <option value="-" ${moduleData.operation === '-' ? 'selected' : ''}>-</option>
+                                <option value="*" ${moduleData.operation === '*' ? 'selected' : ''}>*</option>
+                                <option value="/" ${moduleData.operation === '/' ? 'selected' : ''}>/</option>
+                            </select>
+                        </div>
+                        <div>结果: <span id="result-${moduleData.id}">${moduleData.result || '等待输入...'}</span></div>
+                    </div>
+                `;
+            }
+
+            container.insertAdjacentHTML('beforeend', configCard);
+        }
+
+        // 更新输入模块的值
+        function updateInputModuleValue(moduleId, value) {
+            const module = modules.find(m => m.id === moduleId);
+            if (module && module.type === 'input') {
+                module.values = [parseFloat(value) || 0];
+
+                // 更新模块显示
+                const moduleEl = document.getElementById(moduleId);
+                moduleEl.querySelector('.module-content').textContent =
+                    `值: ${module.values.join(', ')}`;
+
+                updateResults();
+            }
+        }
+
+        // 更新计算模块的运算类型
+        function updateCalculatorOperation(moduleId, operation) {
+            const module = modules.find(m => m.id === moduleId);
+            if (module && module.type === 'calculator') {
+                module.operation = operation;
+
+                // 更新模块显示
+                const moduleEl = document.getElementById(moduleId);
+                moduleEl.querySelector('.operation').textContent = operation;
+
+                updateResults();
+            }
+        }
+
+        // 更新配置面板中的计算结果
+        function updateConfigPanelResults() {
+            modules.forEach(module => {
+                if (module.type === 'calculator') {
+                    const resultElement = document.getElementById(`result-${module.id}`);
+                    if (resultElement) {
+                        resultElement.textContent = module.result || '等待输入...';
+                    }
+                }
+            });
         }
 
         // 使模块可拖动
@@ -687,6 +833,12 @@
                 const moduleEl = document.getElementById(currentEditingModule.id);
                 moduleEl.querySelector('.module-content').textContent =
                     `值: ${inputValues.join(', ')}`;
+
+                // 更新配置面板
+                const configCard = document.getElementById(`config-${currentEditingModule.id}`);
+                if (configCard) {
+                    configCard.querySelector('input').value = inputValues[0];
+                }
             } else if (modalId === 'calculator-modal') {
                 // 保存计算模块配置
                 const operation = document.getElementById('selected-operation').value;
@@ -695,6 +847,12 @@
                 // 更新模块显示
                 const moduleEl = document.getElementById(currentEditingModule.id);
                 moduleEl.querySelector('.operation').textContent = operation;
+
+                // 更新配置面板
+                const configCard = document.getElementById(`config-${currentEditingModule.id}`);
+                if (configCard) {
+                    configCard.querySelector('select').value = operation;
+                }
             }
 
             // 关闭模态框
@@ -716,6 +874,8 @@
 
             // 显示结果
             displayResults();
+            // 更新配置面板中的结果
+            updateConfigPanelResults();
         }
 
         // 计算单个模块的结果
@@ -832,8 +992,12 @@
                 const modal = button.closest('.modal');
                 modal.style.display = 'none';
                 currentEditingModule = null;
+                moduleToDelete = null; // 同时重置删除模块ID
             });
         });
+
+        // 删除确认按钮事件
+        document.getElementById('confirm-delete').addEventListener('click', deleteModule);
     </script>
 </body>
 </html>
