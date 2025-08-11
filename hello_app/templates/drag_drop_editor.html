@@ -45,8 +45,8 @@
         }
 
         #canvas {
-            width: 100%;
-            height: 100%;
+            width: 2000px;
+            height: 2000px;
             position: relative;
         }
 
@@ -60,6 +60,7 @@
             padding: 10px;
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
             cursor: move;
+            user-select: none;
         }
 
         .module-input {
@@ -75,6 +76,16 @@
             margin-bottom: 10px;
             padding-bottom: 5px;
             border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .delete-module {
+            cursor: pointer;
+            color: #ff4444;
+            font-weight: bold;
+            font-size: 14px;
         }
 
         .module-ports {
@@ -88,14 +99,17 @@
             background-color: #666;
             border-radius: 50%;
             margin: 5px 0;
+            cursor: crosshair;
         }
 
-        .input-port {
-            align-self: center;
+        .input-ports {
+            display: flex;
+            flex-direction: column;
         }
 
-        .output-port {
-            align-self: center;
+        .output-ports {
+            display: flex;
+            flex-direction: column;
         }
 
         /* 连线画布 */
@@ -114,12 +128,6 @@
             border-left: 1px solid #ccc;
             padding: 10px;
             overflow-y: auto;
-        }
-
-        .results-panel h3 {
-            margin-top: 0;
-            padding-bottom: 10px;
-            border-bottom: 1px solid #ccc;
         }
 
         /* 模态框样式 */
@@ -294,7 +302,10 @@
             if (type === 'input') {
                 moduleHTML = `
                     <div class="module module-input" id="${moduleId}" style="left: ${x}px; top: ${y}px;">
-                        <div class="module-header">输入模块</div>
+                        <div class="module-header">
+                            输入模块
+                            <span class="delete-module" data-id="${moduleId}">×</span>
+                        </div>
                         <div class="module-content">
                             点击配置数值
                         </div>
@@ -316,7 +327,10 @@
             } else if (type === 'calculator') {
                 moduleHTML = `
                     <div class="module module-calculator" id="${moduleId}" style="left: ${x}px; top: ${y}px;">
-                        <div class="module-header">计算模块</div>
+                        <div class="module-header">
+                            计算模块
+                            <span class="delete-module" data-id="${moduleId}">×</span>
+                        </div>
                         <div class="module-content">
                             运算: <span class="operation">+</span>
                         </div>
@@ -361,6 +375,35 @@
                 });
             });
 
+            // 添加删除按钮事件
+            moduleElement.querySelector('.delete-module').addEventListener('click', (e) => {
+                e.stopPropagation();
+                deleteModule(moduleId);
+            });
+
+            updateResults();
+        }
+
+        // 删除模块
+        function deleteModule(moduleId) {
+            // 从模块数组中移除
+            modules = modules.filter(module => module.id !== moduleId);
+
+            // 移除相关的连线
+            connections = connections.filter(conn =>
+                conn.start.moduleId !== moduleId && conn.end.moduleId !== moduleId
+            );
+
+            // 从DOM中移除
+            const moduleElement = document.getElementById(moduleId);
+            if (moduleElement) {
+                moduleElement.remove();
+            }
+
+            // 重绘连线
+            redrawConnections();
+
+            // 更新结果
             updateResults();
         }
 
