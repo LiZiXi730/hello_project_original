@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>拖拽式编程计算器</title>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* 左侧模块面板 */
+        .modules-panel {
+            width: 200px;
+            background-color: #f0f0f0;
+            border-right: 1px solid #ccc;
+            padding: 10px;
+            overflow-y: auto;
+        }
+
+        .module-item {
+            padding: 10px;
+            margin-bottom: 10px;
+            background-color: white;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            cursor: grab;
+            text-align: center;
+        }
+
+        .module-item:active {
+            cursor: grabbing;
+        }
+
+        /* 中央画布区域 */
+        .canvas-container {
+            flex: 1;
+            position: relative;
+            background-color: #fafafa;
+            overflow: auto;
+        }
+
+        #canvas {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        /* 模块样式 */
+        .module {
+            position: absolute;
+            width: 150px;
+            background-color: white;
+            border: 2px solid #4CAF50;
+            border-radius: 8px;
+            padding: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            cursor: move;
+        }
+
+        .module-input {
+            border-color: #2196F3;
+        }
+
+        .module-calculator {
+            border-color: #ff9800;
+        }
+
+        .module-header {
+            font-weight: bold;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .module-ports {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .port {
+            width: 10px;
+            height: 10px;
+            background-color: #666;
+            border-radius: 50%;
+            margin: 5px 0;
+        }
+
+        .input-port {
+            align-self: center;
+        }
+
+        .output-port {
+            align-self: center;
+        }
+
+        /* 连线画布 */
+        #connection-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        /* 结果显示区 */
+        .results-panel {
+            width: 250px;
+            background-color: #f0f0f0;
+            border-left: 1px solid #ccc;
+            padding: 10px;
+            overflow-y: auto;
+        }
+
+        .results-panel h3 {
+            margin-top: 0;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #ccc;
+        }
+
+        /* 模态框样式 */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 100;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            width: 300px;
+        }
+
+        .modal-footer {
+            margin-top: 20px;
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        button {
+            padding: 8px 16px;
+            margin-left: 10px;
+            cursor: pointer;
+        }
+
+        .tabs {
+            display: flex;
+            margin-bottom: 10px;
+        }
+
+        .tab {
+            padding: 5px 10px;
+            border: 1px solid #ccc;
+            cursor: pointer;
+        }
+
+        .tab.active {
+            background-color: #4CAF50;
+            color: white;
+            border-color: #4CAF50;
+        }
+
+        .input-group {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <!-- 左侧模块面板 -->
+    <div class="modules-panel">
+        <h3>模块库</h3>
+        <div class="module-item" draggable="true" data-type="input">
+            输入数值模块
+        </div>
+        <div class="module-item" draggable="true" data-type="calculator">
+            计算模块
+        </div>
+    </div>
+
+    <!-- 中央画布区域 -->
+    <div class="canvas-container">
+        <div id="canvas"></div>
+        <canvas id="connection-layer"></canvas>
+    </div>
+
+    <!-- 右侧结果面板 -->
+    <div class="results-panel">
+        <h3>计算结果</h3>
+        <div id="results-container">
+            请创建并连接模块进行计算
+        </div>
+    </div>
+
+    <!-- 输入模块配置模态框 -->
+    <div class="modal" id="input-modal">
+        <div class="modal-content">
+            <h3>配置输入模块</h3>
+            <div id="input-values-container">
+                <div class="input-group">
+                    <input type="number" class="input-value" placeholder="输入数值">
+                    <button type="button" class="remove-input">删除</button>
+                </div>
+            </div>
+            <button type="button" id="add-input">添加输入值</button>
+            <div class="modal-footer">
+                <button type="button" class="modal-close">取消</button>
+                <button type="button" class="modal-save">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 计算模块配置模态框 -->
+    <div class="modal" id="calculator-modal">
+        <div class="modal-content">
+            <h3>配置计算模块</h3>
+            <p>选择运算类型：</p>
+            <div class="tabs">
+                <div class="tab active" data-operation="+">加</div>
+                <div class="tab" data-operation="-">减</div>
+                <div class="tab" data-operation="*">乘</div>
+                <div class="tab" data-operation="/">除</div>
+            </div>
+            <input type="hidden" id="selected-operation" value="+">
+            <div class="modal-footer">
+                <button type="button" class="modal-close">取消</button>
+                <button type="button" class="modal-save">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let modules = [];
+        let connections = [];
+        let nextModuleId = 1;
+        let draggingModule = null;
+        let connectionStart = null;
+        let canvas = document.getElementById('canvas');
+        let connectionLayer = document.getElementById('connection-layer');
+        let ctx = connectionLayer.getContext('2d');
+        let currentEditingModule = null;
+
+        // 初始化画布大小
+        function resizeCanvas() {
+            connectionLayer.width = canvas.offsetWidth;
+            connectionLayer.height = canvas.offsetHeight;
+            redrawConnections();
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // 处理模块拖拽
+        document.querySelectorAll('.module-item').forEach(item => {
+            item.addEventListener('dragstart', (e) => {
+                draggingModule = e.target.getAttribute('data-type');
+                e.dataTransfer.setData('text/plain', draggingModule);
+            });
+        });
+
+        canvas.addEventListener('dragover', (e) => {
+            e.preventDefault();
+        });
+
+        canvas.addEventListener('drop', (e) => {
+            e.preventDefault();
+            if (draggingModule) {
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left - 75; // 居中
+                const y = e.clientY - rect.top - 50;
+
+                addModule(draggingModule, x, y);
+                draggingModule = null;
+            }
+        });
+
+        // 添加模块
+        function addModule(type, x, y) {
+            const moduleId = `module-${nextModuleId++}`;
+            let moduleHTML, moduleData;
+
+            if (type === 'input') {
+                moduleHTML = `
+                    <div class="module module-input" id="${moduleId}" style="left: ${x}px; top: ${y}px;">
+                        <div class="module-header">输入模块</div>
+                        <div class="module-content">
+                            点击配置数值
+                        </div>
+                        <div class="module-ports">
+                            <div class="input-ports"></div>
+                            <div class="output-ports">
+                                <div class="port output-port" data-port="output"></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                moduleData = {
+                    id: moduleId,
+                    type: 'input',
+                    x: x,
+                    y: y,
+                    values: [0]
+                };
+            } else if (type === 'calculator') {
+                moduleHTML = `
+                    <div class="module module-calculator" id="${moduleId}" style="left: ${x}px; top: ${y}px;">
+                        <div class="module-header">计算模块</div>
+                        <div class="module-content">
+                            运算: <span class="operation">+</span>
+                        </div>
+                        <div class="module-ports">
+                            <div class="input-ports">
+                                <div class="port input-port" data-port="input1"></div>
+                                <div class="port input-port" data-port="input2"></div>
+                            </div>
+                            <div class="output-ports">
+                                <div class="port output-port" data-port="output"></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                moduleData = {
+                    id: moduleId,
+                    type: 'calculator',
+                    x: x,
+                    y: y,
+                    operation: '+',
+                    result: null
+                };
+            }
+
+            canvas.insertAdjacentHTML('beforeend', moduleHTML);
+            modules.push(moduleData);
+
+            // 添加模块事件
+            const moduleElement = document.getElementById(moduleId);
+            makeDraggable(moduleElement, moduleData);
+
+            // 双击编辑
+            moduleElement.addEventListener('dblclick', () => {
+                openModuleEditor(moduleId);
+            });
+
+            // 端口点击事件 - 用于连线
+            moduleElement.querySelectorAll('.port').forEach(port => {
+                port.addEventListener('mousedown', (e) => {
+                    e.stopPropagation();
+                    startConnection(moduleId, port.getAttribute('data-port'), e);
+                });
+            });
+
+            updateResults();
+        }
+
+        // 使模块可拖动
+        function makeDraggable(element, moduleData) {
+            let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+
+            element.onmousedown = dragMouseDown;
+
+            function dragMouseDown(e) {
+                e = e || window.event;
+                e.preventDefault();
+                // 获取鼠标初始位置
+                pos3 = e.clientX;
+                pos4 = e.clientY;
+                document.onmouseup = closeDragElement;
+                // 当鼠标移动时调用elementDrag函数
+                document.onmousemove = elementDrag;
+            }
+
+            function elementDrag(e) {
+                e = e || window.event;
+                e.preventDefault();
+                // 计算新的元素位置
+                pos1 = pos3 - e.clientX;
+                pos2 = pos4 - e.clientY;
+                pos3 = e.clientX;
+                pos4 = e.clientY;
+                // 设置元素新的位置
+                const newTop = (element.offsetTop - pos2) + "px";
+                const newLeft = (element.offsetLeft - pos1) + "px";
+                element.style.top = newTop;
+                element.style.left = newLeft;
+
+                // 更新模块数据
+                moduleData.x = parseInt(newLeft);
+                moduleData.y = parseInt(newTop);
+
+                // 重绘连线
+                redrawConnections();
+            }
+
+            function closeDragElement() {
+                // 停止移动
+                document.onmouseup = null;
+                document.onmousemove = null;
+            }
+        }
+
+        // 开始连线
+        function startConnection(moduleId, portId, e) {
+            const moduleElement = document.getElementById(moduleId);
+            const portElement = moduleElement.querySelector(`.port[data-port="${portId}"]`);
+
+            const rect = portElement.getBoundingClientRect();
+            const canvasRect = canvas.getBoundingClientRect();
+
+            connectionStart = {
+                moduleId: moduleId,
+                portId: portId,
+                x: rect.left + rect.width/2 - canvasRect.left,
+                y: rect.top + rect.height/2 - canvasRect.top
+            };
+
+            document.onmousemove = drawTemporaryConnection;
+            document.onmouseup = endConnection;
+        }
+
+        // 绘制临时连线
+        function drawTemporaryConnection(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            redrawConnections();
+
+            ctx.beginPath();
+            ctx.moveTo(connectionStart.x, connectionStart.y);
+            ctx.lineTo(x, y);
+            ctx.strokeStyle = '#666';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+
+        // 结束连线
+        function endConnection(e) {
+            document.onmousemove = null;
+            document.onmouseup = null;
+
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            // 检查是否连接到另一个端口
+            let connectionEnd = null;
+
+            document.querySelectorAll('.port').forEach(port => {
+                const portRect = port.getBoundingClientRect();
+                const portX = portRect.left + portRect.width/2 - rect.left;
+                const portY = portRect.top + portRect.height/2 - rect.top;
+
+                // 简单的碰撞检测
+                const distance = Math.sqrt(Math.pow(portX - x, 2) + Math.pow(portY - y, 2));
+                if (distance < 15) {
+                    const moduleId = port.closest('.module').id;
+                    const portId = port.getAttribute('data-port');
+
+                    // 检查是否是有效的连接（输出到输入）
+                    const startModule = modules.find(m => m.id === connectionStart.moduleId);
+                    const endModule = modules.find(m => m.id === moduleId);
+
+                    // 检查是否是不同的模块
+                    if (connectionStart.moduleId !== moduleId) {
+                        // 检查端口类型是否匹配（输出到输入）
+                        if (connectionStart.portId.includes('output') && portId.includes('input')) {
+                            connectionEnd = {
+                                moduleId: moduleId,
+                                portId: portId,
+                                x: portX,
+                                y: portY
+                            };
+                        }
+                    }
+                }
+            });
+
+            // 如果找到有效的目标端口，创建连接
+            if (connectionEnd) {
+                connections.push({
+                    start: connectionStart,
+                    end: connectionEnd
+                });
+            }
+
+            redrawConnections();
+            updateResults();
+        }
+
+        // 重绘所有连线
+        function redrawConnections() {
+            ctx.clearRect(0, 0, connectionLayer.width, connectionLayer.height);
+
+            connections.forEach(conn => {
+                // 更新位置（模块可能已移动）
+                const startModuleEl = document.getElementById(conn.start.moduleId);
+                const endModuleEl = document.getElementById(conn.end.moduleId);
+
+                if (startModuleEl && endModuleEl) {
+                    const startPortEl = startModuleEl.querySelector(`.port[data-port="${conn.start.portId}"]`);
+                    const endPortEl = endModuleEl.querySelector(`.port[data-port="${conn.end.portId}"]`);
+
+                    if (startPortEl && endPortEl) {
+                        const canvasRect = canvas.getBoundingClientRect();
+                        const startRect = startPortEl.getBoundingClientRect();
+                        const endRect = endPortEl.getBoundingClientRect();
+
+                        const startX = startRect.left + startRect.width/2 - canvasRect.left;
+                        const startY = startRect.top + startRect.height/2 - canvasRect.top;
+                        const endX = endRect.left + endRect.width/2 - canvasRect.left;
+                        const endY = endRect.top + endRect.height/2 - canvasRect.top;
+
+                        // 绘制连线
+                        ctx.beginPath();
+                        ctx.moveTo(startX, startY);
+
+                        // 添加一些曲线使连线更美观
+                        const controlX = (startX + endX) / 2;
+                        ctx.quadraticCurveTo(controlX, startY, controlX, (startY + endY) / 2);
+                        ctx.quadraticCurveTo(controlX, endY, endX, endY);
+
+                        ctx.strokeStyle = '#666';
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+
+                        // 绘制箭头
+                        drawArrowhead(ctx, endX, endY, getAngle(startX, startY, endX, endY));
+                    }
+                }
+            });
+        }
+
+        // 绘制箭头
+        function drawArrowhead(ctx, x, y, angle) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(angle);
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(-10, 5);
+            ctx.lineTo(-10, -5);
+            ctx.closePath();
+            ctx.fillStyle = '#666';
+            ctx.fill();
+            ctx.restore();
+        }
+
+        // 计算角度
+        function getAngle(x1, y1, x2, y2) {
+            return Math.atan2(y2 - y1, x2 - x1);
+        }
+
+        // 打开模块编辑器
+        function openModuleEditor(moduleId) {
+            currentEditingModule = modules.find(m => m.id === moduleId);
+            if (!currentEditingModule) return;
+
+            if (currentEditingModule.type === 'input') {
+                openInputModuleEditor();
+            } else if (currentEditingModule.type === 'calculator') {
+                openCalculatorModuleEditor();
+            }
+        }
+
+        // 输入模块编辑器
+        function openInputModuleEditor() {
+            const container = document.getElementById('input-values-container');
+            container.innerHTML = '';
+
+            // 清空并添加现有值
+            currentEditingModule.values.forEach((value, index) => {
+                addInputField(value, index);
+            });
+
+            // 显示模态框
+            document.getElementById('input-modal').style.display = 'flex';
+        }
+
+        // 添加输入字段
+        function addInputField(value = 0, index = null) {
+            const container = document.getElementById('input-values-container');
+            const inputGroup = document.createElement('div');
+            inputGroup.className = 'input-group';
+
+            inputGroup.innerHTML = `
+                <input type="number" class="input-value" value="${value}">
+                <button type="button" class="remove-input">删除</button>
+            `;
+
+            container.appendChild(inputGroup);
+
+            // 添加删除事件
+            inputGroup.querySelector('.remove-input').addEventListener('click', () => {
+                if (container.children.length > 1) {
+                    container.removeChild(inputGroup);
+                }
+            });
+        }
+
+        // 计算模块编辑器
+        function openCalculatorModuleEditor() {
+            // 设置当前选中的运算
+            document.getElementById('selected-operation').value = currentEditingModule.operation;
+
+            // 更新选项卡状态
+            document.querySelectorAll('.tab').forEach(tab => {
+                if (tab.getAttribute('data-operation') === currentEditingModule.operation) {
+                    tab.classList.add('active');
+                } else {
+                    tab.classList.remove('active');
+                }
+            });
+
+            // 显示模态框
+            document.getElementById('calculator-modal').style.display = 'flex';
+        }
+
+        // 保存模块配置
+        function saveModuleConfig(modalId) {
+            if (!currentEditingModule) return;
+
+            if (modalId === 'input-modal') {
+                // 保存输入模块配置
+                const inputValues = [];
+                document.querySelectorAll('#input-values-container .input-value').forEach(input => {
+                    inputValues.push(parseFloat(input.value) || 0);
+                });
+
+                currentEditingModule.values = inputValues;
+
+                // 更新模块显示
+                const moduleEl = document.getElementById(currentEditingModule.id);
+                moduleEl.querySelector('.module-content').textContent =
+                    `值: ${inputValues.join(', ')}`;
+            } else if (modalId === 'calculator-modal') {
+                // 保存计算模块配置
+                const operation = document.getElementById('selected-operation').value;
+                currentEditingModule.operation = operation;
+
+                // 更新模块显示
+                const moduleEl = document.getElementById(currentEditingModule.id);
+                moduleEl.querySelector('.operation').textContent = operation;
+            }
+
+            // 关闭模态框
+            document.getElementById(modalId).style.display = 'none';
+            currentEditingModule = null;
+
+            // 更新结果
+            updateResults();
+        }
+
+        // 更新计算结果
+        function updateResults() {
+            // 计算所有计算模块的结果
+            modules.forEach(module => {
+                if (module.type === 'calculator') {
+                    calculateModuleResult(module);
+                }
+            });
+
+            // 显示结果
+            displayResults();
+        }
+
+        // 计算单个模块的结果
+        function calculateModuleResult(calculatorModule) {
+            // 找到输入连接
+            const input1Connections = connections.filter(conn =>
+                conn.end.moduleId === calculatorModule.id &&
+                conn.end.portId === 'input1'
+            );
+
+            const input2Connections = connections.filter(conn =>
+                conn.end.moduleId === calculatorModule.id &&
+                conn.end.portId === 'input2'
+            );
+
+            // 获取输入值
+            let input1Value = null;
+            let input2Value = null;
+
+            if (input1Connections.length > 0) {
+                const sourceModuleId = input1Connections[0].start.moduleId;
+                const sourceModule = modules.find(m => m.id === sourceModuleId);
+
+                if (sourceModule && sourceModule.type === 'input') {
+                    // 取第一个值
+                    input1Value = sourceModule.values[0];
+                }
+            }
+
+            if (input2Connections.length > 0) {
+                const sourceModuleId = input2Connections[0].start.moduleId;
+                const sourceModule = modules.find(m => m.id === sourceModuleId);
+
+                if (sourceModule && sourceModule.type === 'input') {
+                    // 取第一个值
+                    input2Value = sourceModule.values[0];
+                }
+            }
+
+            // 执行计算
+            if (input1Value !== null && input2Value !== null) {
+                switch (calculatorModule.operation) {
+                    case '+':
+                        calculatorModule.result = input1Value + input2Value;
+                        break;
+                    case '-':
+                        calculatorModule.result = input1Value - input2Value;
+                        break;
+                    case '*':
+                        calculatorModule.result = input1Value * input2Value;
+                        break;
+                    case '/':
+                        calculatorModule.result = input2Value !== 0 ?
+                            input1Value / input2Value : 'Error (div by 0)';
+                        break;
+                }
+            } else {
+                calculatorModule.result = '等待输入...';
+            }
+        }
+
+        // 显示结果
+        function displayResults() {
+            const container = document.getElementById('results-container');
+            container.innerHTML = '';
+
+            // 只显示有结果的计算模块
+            const calculatorModules = modules.filter(m => m.type === 'calculator');
+
+            if (calculatorModules.length === 0) {
+                container.innerHTML = '请添加计算模块并连接输入';
+                return;
+            }
+
+            calculatorModules.forEach((module, index) => {
+                const resultEl = document.createElement('div');
+                resultEl.style.marginBottom = '10px';
+                resultEl.style.padding = '10px';
+                resultEl.style.backgroundColor = 'white';
+                resultEl.style.borderRadius = '5px';
+
+                resultEl.innerHTML = `
+                    <strong>计算模块 ${index + 1}</strong>
+                    <div>运算: ${module.operation}</div>
+                    <div>结果: <strong>${module.result}</strong></div>
+                `;
+
+                container.appendChild(resultEl);
+            });
+        }
+
+        // 事件监听 - 模态框操作
+        document.getElementById('add-input').addEventListener('click', () => {
+            addInputField();
+        });
+
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('selected-operation').value = tab.getAttribute('data-operation');
+            });
+        });
+
+        document.querySelectorAll('.modal-save').forEach(button => {
+            button.addEventListener('click', () => {
+                const modalId = button.closest('.modal').id;
+                saveModuleConfig(modalId);
+            });
+        });
+
+        document.querySelectorAll('.modal-close').forEach(button => {
+            button.addEventListener('click', () => {
+                const modal = button.closest('.modal');
+                modal.style.display = 'none';
+                currentEditingModule = null;
+            });
+        });
+    </script>
+</body>
+</html>
